@@ -1,0 +1,51 @@
+name: Publish Windows Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish EXE to Releases
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install -r requirements-build.txt
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+      - name: Build Windows EXE
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name SRT-UTF8-Studio --icon assets/app.ico --add-data 'assets/app.png;assets' --add-data 'assets/app.ico;assets' app.py
+      - name: Determine release version
+        id: version
+        shell: pwsh
+        run: |
+          if ('${{ github.ref_type }}' -eq 'tag') {
+            "tag=${{ github.ref_name }}" >> $env:GITHUB_OUTPUT
+          } else {
+            "tag=v1.0.0-manual-${{ github.run_number }}" >> $env:GITHUB_OUTPUT
+          }
+      - name: Publish GitHub Release asset
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release view "$env:RELEASE_TAG" 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload "$env:RELEASE_TAG" 'dist/SRT-UTF8-Studio.exe' --clobber
+          } else {
+            gh release create "$env:RELEASE_TAG" 'dist/SRT-UTF8-Studio.exe' --title "SRT UTF-8 Studio $env:RELEASE_TAG" --generate-notes
+          }

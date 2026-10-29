@@ -1,0 +1,43 @@
+name: Windows EXE Build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-exe:
+    name: Test and build Windows EXE
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-build.txt
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-build.txt
+      - name: Test encoding and batch behavior
+        run: python -m unittest discover -s tests -v
+      - name: Build single-file GUI EXE
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name SRT-UTF8-Studio --icon assets/app.ico --add-data 'assets/app.png;assets' --add-data 'assets/app.ico;assets' app.py
+      - name: Upload downloadable EXE
+        uses: actions/upload-artifact@v7
+        with:
+          name: SRT-UTF8-Studio-Windows-x64
+          path: dist/SRT-UTF8-Studio.exe
+          if-no-files-found: error
